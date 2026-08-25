@@ -5,6 +5,7 @@
 1. 最初はGoogle Drive手動保存＋Claudeの毎時Routineでチェックする方式で作った。
 2. 「待機中もトークンを消費するのが心配」というフィードバックを受け、Claudeとの対話の中で直接サイトを更新する方式に変えた（Google Drive不要）。
 3. さらに「Cowork環境からGitHub認証ができない」という制約が判明し、**GitHub Actionsによる完全自動化**に切り替えた（2026-08-25）。これにより、Claudeのセッション・トークンを一切使わずに自動更新できるようになった。
+4. 「日記を書いた瞬間に近いタイミングで更新してほしい」という要望を受け、**Google Apps Script**（1分おきにGoogle Driveを監視し、新しい日記を見つけたらGitHub Actionsを即時起動する）を追加した（2026-08-25）。これにより、毎時0分を待たず**最短1分以内**に反映されるようになった。
 
 ## 今の仕組み
 
@@ -12,7 +13,9 @@
 はるかちゃんがCoworkでチャッピーと日記をまとめる
    ↓（今まで通り）
 Google Drive「できたこと日記」フォルダに保存
-   ↓（GitHub Actionsが毎時0分に自動チェック）
+   ↓（Google Apps Scriptが1分おきに監視、新しい日記を発見）
+GitHub Actionsをその場で起動（workflow_dispatch）
+   ↓
 scripts/build_diary_page.py が今日の日記を検出
    ↓
 diary/YYYY-MM-DD.md に保存 + docs/index.html を再構築
@@ -22,8 +25,9 @@ git commit & push（差分が無ければ何もしない）
 GitHub Pages が自動で最新版を配信
 ```
 
-- **Claudeのトークンは一切消費しない**（GitHub Actionsの無料枠内で完結。Publicリポジトリなので実行時間は無制限に無料）。
-- 日記を書いてからサイトに反映されるまで、最大1時間弱のタイムラグがある（GitHub Actionsの実用上の最短間隔が1時間のため）。すぐ見たい時は SETUP.md の「手動テスト実行」と同じ手順で即時実行できる。
+- **Claudeのトークンは一切消費しない**（GitHub Actions・Google Apps Scriptとも無料枠内で完結。Publicリポジトリなので実行時間は無制限に無料）。
+- 日記を書いてからサイトに反映されるまで、**最短1分以内**（Google Apps Scriptによる即時起動、2026-08-25設定）。万一Apps Script側が動かない場合でも、GitHub Actions自体の毎時0分の定期チェックが保険として残っている（最大1時間弱）。
+- セットアップ手順（GitHubトークン発行・Apps Scriptの設置・トリガー設定）は [`../SETUP.md`](../SETUP.md) の「ステップ6」を参照。
 
 ## セットアップについて
 
