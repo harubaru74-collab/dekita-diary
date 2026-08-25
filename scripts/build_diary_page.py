@@ -91,7 +91,7 @@ def download_text(service, file):
 # ---------------------------------------------------------------------------
 
 def unescape_md(text):
-    """Google Drive の text/plain が返す `\#` `\*\*` `\-` 等のエスケープを戻す。"""
+    r"""Google Drive の text/plain が返す `\#` `\*\*` `\-` 等のエスケープを戻す。"""
     return re.sub(r"\\([#*\-\[\]()>.!])", r"\1", text)
 
 
