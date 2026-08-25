@@ -110,6 +110,12 @@ HEADER_MAP = {
     "dekita": ("できたこと",),
     "summary": ("要約",),
     "chappy": ("チャッピー",),
+    # 2026-08-25追加: メンタルコンディショニング機能(任意セクション)。
+    # しんどい・悩みがある日だけ、Cowork側の判断でこの3セクションを追加してもらう。
+    # 元気な日は書かなくてよい(セクションが無ければ何も表示されない)。
+    "mental": ("メンタル状態",),
+    "overcome_log": ("乗り越えログ",),
+    "takeshi_message": ("毅さんからのメッセージ", "毅さんメッセージ"),
 }
 
 
@@ -210,6 +216,37 @@ def render_card(kind_class, badge, d, sections):
     return "\n".join(blocks)
 
 
+def render_message_card(sections):
+    """メンタルコンディショニング機能: しんどい・悩みがある日だけ、Cowork側の
+    判断で書かれる任意セクション(メンタル状態/乗り越えログ/毅さんからの
+    メッセージ)からカードを作る。「毅さんからのメッセージ」が無い日は
+    空文字を返す(=何も表示しない。元気な日はこのカード自体が出ない)。"""
+    message = sections.get("takeshi_message", "").strip()
+    if not message:
+        return ""
+
+    energy_line = ""
+    mental = sections.get("mental", "")
+    m = re.search(r"エネルギー[:：]\s*(.+)", mental)
+    if m:
+        energy_line = f'<div class="message-energy">今日のエネルギー：{esc(m.group(1).strip())}</div>'
+
+    overcome_html = ""
+    if sections.get("overcome_log"):
+        overcome_html = f'''
+      <details>
+        <summary>前にも乗り越えた日があるよ</summary>
+        <div class="body-text">{esc(sections["overcome_log"])}</div>
+      </details>'''
+
+    return f'''  <div class="message-card">
+    <span class="badge">🫂 今日のひとこと</span>
+    {energy_line}
+    <p class="message-text">{esc(message)}</p>{overcome_html}
+  </div>
+'''
+
+
 def make_headline(sections):
     items = list_items(sections.get("dekita", "")) or list_items(sections.get("dekigoto", ""))
     if not items:
@@ -241,6 +278,13 @@ def render_entry(d, sections, open_=False):
             "    <details>\n"
             "      <summary>チャッピーからのコメントを見る</summary>\n"
             f'      <div class="chappy">{esc(sections["chappy"])}</div>\n'
+            "    </details>"
+        )
+    if sections.get("takeshi_message"):
+        parts.append(
+            "    <details>\n"
+            "      <summary>この日のひとことを見る</summary>\n"
+            f'      <div class="chappy">{esc(sections["takeshi_message"])}</div>\n'
             "    </details>"
         )
     body = "\n".join(parts)
@@ -333,6 +377,9 @@ def build_page(anchor=None):
     month_card = card_for("month", "1ヶ月前", month_ago)
     year_card = card_for("year", "1年前", year_ago)
 
+    today_sections = load_existing(today) or {}
+    message_card = render_message_card(today_sections)
+
     entries_html = []
     for i, d in enumerate(all_days):
         sections = load_existing(d)
@@ -346,6 +393,7 @@ def build_page(anchor=None):
     out = out.replace("{{TODAY_DATE_JP}}", date_jp(today))
     out = out.replace("{{DIARY_COUNT}}", str(len(all_days)))
     out = out.replace("{{FIRST_DATE_JP}}", date_jp(all_days[-1]))
+    out = out.replace("  <!-- MESSAGE_CARD -->\n", message_card)
     out = out.replace("    <!-- TODAY_CARD -->", today_card)
     out = out.replace("    <!-- WEEK_CARD -->", week_card)
     out = out.replace("    <!-- MONTH_CARD -->", month_card)
