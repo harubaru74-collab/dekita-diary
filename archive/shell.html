@@ -223,25 +223,31 @@
     margin-top: auto;
   }
 
-  .card details {
+  .card details,
+  .entry-body details {
     margin-top: 0.5em;
     font-size: 0.85rem;
   }
-  .card details summary {
+  .card details summary,
+  .entry-body details summary {
     cursor: pointer;
     color: var(--sky);
     font-weight: 600;
     list-style: none;
   }
-  .card details summary::-webkit-details-marker { display: none; }
-  .card details summary::before { content: "▸ "; }
-  .card details[open] summary::before { content: "▾ "; }
+  .card details summary::-webkit-details-marker,
+  .entry-body details summary::-webkit-details-marker { display: none; }
+  .card details summary::before,
+  .entry-body details summary::before { content: "▸ "; }
+  .card details[open] summary::before,
+  .entry-body details[open] summary::before { content: "▾ "; }
   .card details .body-text {
     margin-top: 0.5em;
     color: var(--ink);
     white-space: pre-wrap;
   }
-  .card details .chappy {
+  .card details .chappy,
+  .entry-body details .chappy {
     margin-top: 0.5em;
     padding: 0.7em 0.85em;
     background: color-mix(in srgb, var(--sun) 12%, transparent);
