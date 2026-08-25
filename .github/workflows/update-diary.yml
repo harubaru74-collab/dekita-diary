@@ -1,0 +1,47 @@
+name: できたこと日記 自動更新
+
+on:
+  schedule:
+    # 毎時0分(UTC)にチェック。実際に処理・pushが走るのは、今日の日記が
+    # Google Driveに新しく見つかった時だけ(スクリプト側で判定)。
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-diary
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Build diary page
+        env:
+          GDRIVE_SA_KEY_JSON: ${{ secrets.GDRIVE_SA_KEY_JSON }}
+        run: python scripts/build_diary_page.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "dekita-diary-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add diary docs
+          if git diff --cached --quiet; then
+            echo "変更なし。コミットしません。"
+          else
+            git commit -m "🌱 自動更新: できたこと日記"
+            git push
+          fi

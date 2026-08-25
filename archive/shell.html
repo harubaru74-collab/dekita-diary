@@ -1,10 +1,10 @@
 <!--
   できたこと日記 成長可視化ページの「型」
 
-  これは Claude Artifact として公開する HTML の土台（デザイン部分）。
-  毎晩22:00 JSTのルーティン（ROUTINE.md参照）が、このファイルを読み込み、
-  Google Drive の diary を変換したHTMLを以下のプレースホルダーに差し込んで、
-  完成したHTMLをArtifactツールで同じURLに再公開する。
+  これは GitHub Pages（docs/index.html）として公開する HTML の土台（デザイン部分）。
+  GitHub Actions（.github/workflows/update-diary.yml → scripts/build_diary_page.py）が、
+  このファイルを読み込み、diary/*.md を変換したHTMLを以下のプレースホルダーに差し込んで、
+  docs/index.html として書き出す。
 
   差し込み時に置換・挿入するプレースホルダー：
     {{TODAY_DATE_JP}}     → "2026年8月25日（火）" のような表示
@@ -17,8 +17,13 @@
     <!-- ARCHIVE_ENTRIES --> → これまでの全日記を新しい順に<details>で並べたもの
 
   詳しい変換ルール・カードのHTML構造は archive/BUILD.md を参照。
+
+  このページはGitHub Pagesとして公開される＝URLを知っていれば誰でも見られる。
+  検索エンジンへの掲載だけは抑止するため、下の<meta name="robots">を残すこと。
 -->
 <title>できたこと日記 — 成長のあしあと</title>
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
     --bg: #fbf7ee;
@@ -378,6 +383,6 @@
   <!-- ARCHIVE_ENTRIES -->
 
   <footer class="page-footer">
-    はるかちゃんの「できたこと日記」— 毎晩22:00に自動更新
+    はるかちゃんの「できたこと日記」— 日記を書くと自動で更新されます
   </footer>
 </div>
