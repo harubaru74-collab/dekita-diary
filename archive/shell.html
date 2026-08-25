@@ -1,0 +1,377 @@
+<!--
+  できたこと日記 成長可視化ページの「型」
+
+  これは Claude Artifact として公開する HTML の土台（デザイン部分）。
+  毎晩22:00 JSTのルーティン（ROUTINE.md参照）が、このファイルを読み込み、
+  Google Drive の diary を変換したHTMLを以下のプレースホルダーに差し込んで、
+  完成したHTMLをArtifactツールで同じURLに再公開する。
+
+  差し込み時に置換・挿入するプレースホルダー：
+    {{TODAY_DATE_JP}}     → "2026年8月25日（火）" のような表示
+    {{DIARY_COUNT}}       → これまでに書かれた日記の総日数
+    {{FIRST_DATE_JP}}     → 一番古い日記の日付（"2026年8月16日" 等）
+    <!-- TODAY_CARD -->   → 今日のカードのHTML（1つ）
+    <!-- WEEK_CARD -->    → 1週間前のカードのHTML（1つ）
+    <!-- MONTH_CARD -->   → 1ヶ月前のカードのHTML（1つ）
+    <!-- YEAR_CARD -->    → 1年前のカードのHTML（1つ）
+    <!-- ARCHIVE_ENTRIES --> → これまでの全日記を新しい順に<details>で並べたもの
+
+  詳しい変換ルール・カードのHTML構造は archive/BUILD.md を参照。
+-->
+<title>できたこと日記 — 成長のあしあと</title>
+<style>
+  :root {
+    --bg: #fbf7ee;
+    --bg-blob-1: #d9ecd0;
+    --bg-blob-2: #ffe3c2;
+    --card: #ffffff;
+    --card-border: #ece3d1;
+    --ink: #3a3327;
+    --ink-soft: #8f8571;
+    --leaf: #5a9c6e;
+    --leaf-ink: #ffffff;
+    --sun: #e8935a;
+    --sky: #6a93b0;
+    --bloom: #c97fa0;
+    --shadow: rgba(90, 75, 40, 0.12);
+    --focus: #5a9c6e;
+    --empty-bg: #f3efe4;
+    --empty-ink: #a89d84;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1c1f19;
+      --bg-blob-1: #223324;
+      --bg-blob-2: #33291d;
+      --card: #262a22;
+      --card-border: #3a3f31;
+      --ink: #eee9da;
+      --ink-soft: #a5a08c;
+      --leaf: #7fc492;
+      --leaf-ink: #163019;
+      --sun: #f0a875;
+      --sky: #8fb8d4;
+      --bloom: #dda2bc;
+      --shadow: rgba(0, 0, 0, 0.35);
+      --focus: #7fc492;
+      --empty-bg: #23261f;
+      --empty-ink: #6f6b58;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #1c1f19;
+    --bg-blob-1: #223324;
+    --bg-blob-2: #33291d;
+    --card: #262a22;
+    --card-border: #3a3f31;
+    --ink: #eee9da;
+    --ink-soft: #a5a08c;
+    --leaf: #7fc492;
+    --leaf-ink: #163019;
+    --sun: #f0a875;
+    --sky: #8fb8d4;
+    --bloom: #dda2bc;
+    --shadow: rgba(0, 0, 0, 0.35);
+    --focus: #7fc492;
+    --empty-bg: #23261f;
+    --empty-ink: #6f6b58;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", "Hiragino Sans", sans-serif;
+    line-height: 1.85;
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  .bg-blob {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(70px);
+    opacity: 0.5;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .bg-blob.one { width: 32rem; height: 32rem; top: -14rem; right: -12rem; background: var(--bg-blob-1); }
+  .bg-blob.two { width: 26rem; height: 26rem; bottom: 8rem; left: -14rem; background: var(--bg-blob-2); }
+
+  a { color: var(--sky); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:hover { color: var(--sun); }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 2.75rem 1.25rem 5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  header.hero {
+    text-align: center;
+    margin-bottom: 2.25rem;
+  }
+  header.hero .kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    font-size: 0.85rem;
+    color: var(--leaf);
+    background: color-mix(in srgb, var(--leaf) 14%, transparent);
+    padding: 0.3em 0.9em;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  header.hero h1 {
+    font-size: clamp(1.6rem, 4vw, 2.35rem);
+    margin: 0.6em 0 0.3em;
+    letter-spacing: 0.01em;
+  }
+  header.hero p.sub {
+    color: var(--ink-soft);
+    margin: 0;
+    font-size: 0.95rem;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+  @media (max-width: 980px) {
+    .cards { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .cards { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 1.3rem 1.2rem 1.5rem;
+    box-shadow: 0 10px 28px var(--shadow);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .card .badge {
+    align-self: flex-start;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.25em 0.8em;
+    border-radius: 999px;
+    color: var(--leaf-ink);
+    background: var(--leaf);
+    margin-bottom: 0.6em;
+  }
+  .card.today .badge { background: var(--sun); }
+  .card.week .badge { background: var(--leaf); }
+  .card.month .badge { background: var(--sky); }
+  .card.year .badge { background: var(--bloom); }
+
+  .card .date {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    margin-bottom: 0.75em;
+  }
+
+  .card h3.headline {
+    font-size: 1.02rem;
+    margin: 0 0 0.6em;
+    line-height: 1.5;
+  }
+
+  .card .dekita {
+    list-style: none;
+    margin: 0 0 0.9em;
+    padding: 0;
+    font-size: 0.9rem;
+  }
+  .card .dekita li {
+    position: relative;
+    padding-left: 1.3em;
+    margin-bottom: 0.55em;
+  }
+  .card .dekita li::before {
+    content: "🌱";
+    position: absolute;
+    left: 0;
+    top: 0.05em;
+    font-size: 0.85em;
+  }
+
+  .card .summary-line {
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+    border-top: 1px dashed var(--card-border);
+    padding-top: 0.75em;
+    margin-top: auto;
+  }
+
+  .card details {
+    margin-top: 0.5em;
+    font-size: 0.85rem;
+  }
+  .card details summary {
+    cursor: pointer;
+    color: var(--sky);
+    font-weight: 600;
+    list-style: none;
+  }
+  .card details summary::-webkit-details-marker { display: none; }
+  .card details summary::before { content: "▸ "; }
+  .card details[open] summary::before { content: "▾ "; }
+  .card details .body-text {
+    margin-top: 0.5em;
+    color: var(--ink);
+    white-space: pre-wrap;
+  }
+  .card details .chappy {
+    margin-top: 0.5em;
+    padding: 0.7em 0.85em;
+    background: color-mix(in srgb, var(--sun) 12%, transparent);
+    border-radius: 12px;
+    white-space: pre-wrap;
+    font-size: 0.92em;
+  }
+
+  .card.empty {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: var(--empty-bg);
+    border-style: dashed;
+  }
+  .card.empty .emoji { font-size: 1.8rem; margin-bottom: 0.3em; }
+  .card.empty p { color: var(--empty-ink); font-size: 0.85rem; margin: 0; }
+
+  .archive-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5em;
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 0.5em;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .archive-heading h2 {
+    font-size: 1.15rem;
+    margin: 0;
+  }
+  .archive-heading .meta {
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+  }
+
+  details.entry {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    margin-bottom: 0.7rem;
+    box-shadow: 0 4px 14px var(--shadow);
+    overflow: hidden;
+  }
+  details.entry summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 0.9rem 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+    font-size: 0.92rem;
+  }
+  details.entry summary::-webkit-details-marker { display: none; }
+  details.entry .entry-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--leaf-ink);
+    background: var(--leaf);
+    padding: 0.2em 0.7em;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  details.entry .entry-headline {
+    flex: 1;
+    min-width: 0;
+    color: var(--ink-soft);
+  }
+  details.entry .entry-toggle {
+    color: var(--ink-soft);
+  }
+  details.entry .entry-body {
+    padding: 0 1.1rem 1.1rem;
+    font-size: 0.9rem;
+  }
+  details.entry .entry-body h4 {
+    font-size: 0.88rem;
+    margin: 1em 0 0.4em;
+    color: var(--ink-soft);
+  }
+  details.entry .entry-body ul {
+    margin: 0 0 0.6em;
+    padding-left: 1.2em;
+  }
+  details.entry .entry-body p {
+    margin: 0 0 0.6em;
+    white-space: pre-wrap;
+  }
+  details.entry .entry-body .chappy {
+    padding: 0.7em 0.85em;
+    background: color-mix(in srgb, var(--sun) 12%, transparent);
+    border-radius: 12px;
+    white-space: pre-wrap;
+    font-size: 0.95em;
+  }
+
+  footer.page-footer {
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 0.8rem;
+    margin-top: 3rem;
+  }
+</style>
+
+<div class="bg-blob one"></div>
+<div class="bg-blob two"></div>
+
+<div class="wrap">
+  <header class="hero">
+    <span class="kicker">🌱 できたこと日記</span>
+    <h1>{{TODAY_DATE_JP}} の成長のあしあと</h1>
+    <p class="sub">今日・1週間前・1ヶ月前・1年前の「できたこと」を並べて、積み重ねを見える化する場所</p>
+  </header>
+
+  <div class="cards">
+    <!-- TODAY_CARD -->
+    <!-- WEEK_CARD -->
+    <!-- MONTH_CARD -->
+    <!-- YEAR_CARD -->
+  </div>
+
+  <div class="archive-heading">
+    <h2>📖 これまでの記録</h2>
+    <span class="meta">全{{DIARY_COUNT}}日分・{{FIRST_DATE_JP}}〜</span>
+  </div>
+
+  <!-- ARCHIVE_ENTRIES -->
+
+  <footer class="page-footer">
+    はるかちゃんの「できたこと日記」— 毎晩22:00に自動更新
+  </footer>
+</div>
