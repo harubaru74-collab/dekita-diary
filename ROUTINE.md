@@ -13,7 +13,9 @@
 
 ## 日々の使い方
 
-1. はるかちゃんが、この `harubaru74-collab/dekita-diary` リポジトリにアクセスできるClaudeとの会話（このセッション、またはこのリポジトリを開いた新しいセッション）で、いつも通り今日の出来事を話す。
+**主な窓口はClaude Cowork。**「Cowork」も中身はこのセッションと同じClaude Code基盤なので、Coworkだけで完結できる。次にCoworkを開いたら、最初に一度「GitHubの `harubaru74-collab/dekita-diary` を見て。`ROUTINE.md` の通りに、今日の日記をまとめたらそのままサイトも更新して」のように伝える（リポジトリ・Artifact・Google Driveアクセスは既にセットアップ済みなので、Cowork側での追加作業はほぼ不要なはず）。
+
+1. はるかちゃんが、この `harubaru74-collab/dekita-diary` リポジトリにアクセスできるClaudeとの会話（Cowork、このセッション、またはこのリポジトリを開いた新しいセッションのいずれでもよい）で、いつも通り今日の出来事を話す。
 2. Claudeが「原文ママ／今日のできごと／できたこと／要約／チャッピーからのコメント」の形にまとめる（これまでの `diary/*.md` の文体・トーンを参考にする）。
 3. はるかちゃんが内容にOKを出したら、Claudeはその場で：
    a. `diary/YYYY-MM-DD.md` として保存する。
