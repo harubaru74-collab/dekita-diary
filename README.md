@@ -17,8 +17,10 @@ Google CloudサービスアカウントとGitHub側の設定が必要。手順�
 ## このリポジトリの役割
 
 - `diary/` … 日記本文(Markdown、原文のまま)。2026-08-16〜08-24分は初期移行データ
-- `docs/` … GitHub Pagesが配信する成長可視化ページ本体(`index.html`、自動生成)
-- `archive/shell.html` … 成長可視化ページのデザインの型
+- `docs/` … GitHub Pagesが配信する成長可視化ページ本体
+  - `index.html` … 自動生成されるページ本体(手で編集しないこと)
+  - `manifest.json` / `sw.js` / `icons/` … PWA化(2026-08-25追加)のための静的ファイル。スクリプトの再生成対象外
+- `archive/shell.html` … 成長可視化ページのデザインの型(PWA用のlinkタグ・SW登録スクリプトもここに含む)
 - `archive/BUILD.md` … `scripts/build_diary_page.py` が実装している変換ルールの仕様書
 - `scripts/build_diary_page.py` … Google Drive読込→HTML生成→保存を行う本体スクリプト
 - `.github/workflows/update-diary.yml` … 自動実行するGitHub Actionsワークフロー
