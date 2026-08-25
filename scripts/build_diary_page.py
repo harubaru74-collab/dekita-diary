@@ -142,6 +142,10 @@ def list_items(text):
         if not line:
             continue
         line = re.sub(r"^[-*・]\s*", "", line)
+        # 2026-08-25: 日記作成側で「[stated]」等のデバッグ用タグが本文に
+        # 紛れ込んで保存されることがあったため、表示直前で防御的に除去する
+        # (見た目が「文が途中で切れている」ように誤解されてしまうため)。
+        line = re.sub(r"^\[[a-zA-Z_-]+\]\s*", "", line)
         if line:
             items.append(line)
     return items
@@ -153,6 +157,26 @@ def esc(s):
 
 def md_bold(s):
     return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", esc(s))
+
+
+TERMINAL_PUNCT = "。！？!?"
+
+
+def to_prose(items):
+    """箇条書きの項目群を、読みやすい1つの文章(段落)に変換する。
+    「できたこと」欄(箇条書きのまま)と見た目が重複しないよう、
+    「今日のできごと」欄はこちらを通して文章化して表示する。
+    項目が既に「！」「？」等で終わっている場合はそのまま活かし、
+    句点が無い場合だけ「。」を補う(「！。」のような二重句読点を避ける)。"""
+    parts = []
+    for it in items:
+        it = it.strip()
+        if not it:
+            continue
+        if it[-1] not in TERMINAL_PUNCT:
+            it += "。"
+        parts.append(it)
+    return "".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -196,8 +220,9 @@ def render_card(kind_class, badge, d, sections):
 {dekita_html}
       </ul>''']
 
-    if sections.get("dekigoto"):
-        body = esc(sections["dekigoto"])
+    dekigoto_items = list_items(sections.get("dekigoto", ""))
+    if dekigoto_items:
+        body = md_bold(to_prose(dekigoto_items))
         blocks.append(f'''      <details>
         <summary>今日のできごとを見る</summary>
         <div class="body-text">{body}</div>
@@ -266,8 +291,7 @@ def render_entry(d, sections, open_=False):
 
     parts = []
     if dekigoto_items:
-        lis = "\n".join(f"      <li>{esc(x)}</li>" for x in dekigoto_items)
-        parts.append(f"    <h4>今日のできごと</h4>\n    <ul>\n{lis}\n    </ul>")
+        parts.append(f"    <h4>今日のできごと</h4>\n    <p>{md_bold(to_prose(dekigoto_items))}</p>")
     if dekita_items:
         lis = "\n".join(f"      <li>{md_bold(x)}</li>" for x in dekita_items)
         parts.append(f"    <h4>できたこと</h4>\n    <ul>\n{lis}\n    </ul>")
