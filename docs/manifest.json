@@ -1,0 +1,17 @@
+{
+  "name": "できたこと日記 — 成長のあしあと",
+  "short_name": "できたこと日記",
+  "description": "今日・1週間前・1ヶ月前・1年前の「できたこと」を並べて、成長を見える化するページ",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbf7ee",
+  "theme_color": "#5a9c6e",
+  "lang": "ja",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
