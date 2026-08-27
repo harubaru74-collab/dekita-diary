@@ -56,19 +56,41 @@ def get_drive_service():
     return build("drive", "v3", credentials=creds, cache_discovery=False)
 
 
-def find_diary_file(service, date_str):
-    """指定日付(YYYY-MM-DD)の日記ファイルをフォルダ内から探す。無ければNone。"""
-    safe = date_str.replace("'", "\\'")
-    q = f"'{FOLDER_ID}' in parents and name contains '{safe}' and trashed = false"
-    resp = service.files().list(
-        q=q, fields="files(id, name, mimeType)", pageSize=20
-    ).execute()
-    files = resp.get("files", [])
-    candidates = [
-        f for f in files
-        if date_str in f["name"] and ("のできごと" in f["name"] or "できたこと日記" in f["name"])
-    ]
-    return candidates[0] if candidates else None
+DATE_IN_NAME = re.compile(r"(\d{4}-\d{2}-\d{2})")
+
+
+def list_diary_files(service):
+    """フォルダ内の日記ファイルを全部リストする(ページングに対応)。
+    タイトルに日付＋「のできごと」/「できたこと日記」を含むものだけを対象にする
+    (同フォルダに無関係なファイルが混ざっていることがあるため)。"""
+    files = []
+    page_token = None
+    while True:
+        resp = service.files().list(
+            q=f"'{FOLDER_ID}' in parents and trashed = false",
+            fields="nextPageToken, files(id, name, mimeType)",
+            pageSize=200,
+            pageToken=page_token,
+        ).execute()
+        files.extend(resp.get("files", []))
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            break
+
+    result = {}
+    for f in files:
+        name = f["name"]
+        if not ("のできごと" in name or "できたこと日記" in name):
+            continue
+        m = DATE_IN_NAME.search(name)
+        if not m:
+            continue
+        try:
+            d = datetime.date.fromisoformat(m.group(1))
+        except ValueError:
+            continue
+        result[d] = f
+    return result
 
 
 def download_text(service, file):
@@ -355,16 +377,23 @@ def save_diary_file(d, raw_text, title_hint):
     return True
 
 
-def ensure_backup(service, d):
-    """diary/ に無ければGoogle Driveから取得して保存する。戻り値: 新規保存したか"""
-    if os.path.exists(diary_path(d)):
-        return False
-    file = find_diary_file(service, d.isoformat())
-    if not file:
-        return False
-    raw = download_text(service, file)
-    save_diary_file(d, raw, file["name"])
-    return True
+def sync_all_diary_files(service):
+    """Google Driveの日記フォルダ全体をスキャンし、diary/にまだ無い日付が
+    あれば全部バックアップする。「今日」だけでなく、書き忘れて後から
+    まとめて投稿した過去日の日記も、これで確実に拾われるようになる
+    (2026-08-27、「昨日の分を書いたのにサイトに反映されない」という
+    フィードバックを受けて、今日/7日前/30日前/365日前の4点だけを
+    見に行く方式から、フォルダ全体の同期に変更した)。
+    戻り値: 新しく保存できた日付のリスト。"""
+    drive_files = list_diary_files(service)
+    saved = []
+    for d, file in drive_files.items():
+        if os.path.exists(diary_path(d)):
+            continue
+        raw = download_text(service, file)
+        if save_diary_file(d, raw, file["name"]):
+            saved.append(d)
+    return saved
 
 
 def build_page(anchor=None):
@@ -434,16 +463,16 @@ def main():
     service = get_drive_service()
     today = datetime.date.today()
 
-    got_today = ensure_backup(service, today)
-    if not got_today and not os.path.exists(diary_path(today)):
-        print(f"{today.isoformat()} の日記はまだ見つかりません。今回は何もせず終了します。")
-        # 過去日の付け合わせ用データだけは更新しておく(既存分のみ、Drive問い合わせなし)
-        build_page()
-        return
+    saved_dates = sync_all_diary_files(service)
+    if saved_dates:
+        print(f"新規保存: {', '.join(d.isoformat() for d in sorted(saved_dates))}")
 
-    for delta in (7, 30, 365):
-        ensure_backup(service, today - datetime.timedelta(days=delta))
+    if not os.path.exists(diary_path(today)) and today not in saved_dates:
+        print(f"{today.isoformat()} の日記はまだ見つかりません。")
 
+    # 新しい日記が1件も無い場合でも、日付の表示を最新に保つため
+    # (日付をまたいだ後の最初の実行で「今日」ラベルを更新する目的)、
+    # ページの再構築は毎回行う。
     build_page()
 
 
