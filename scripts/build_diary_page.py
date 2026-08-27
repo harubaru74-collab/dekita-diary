@@ -231,13 +231,16 @@ def render_empty_card(badge, today=False):
     </div>'''
 
 
-def render_card(kind_class, badge, d, sections):
+def render_card_body(d, sections):
+    """カードの中身(日付・できたこと・詳細)だけを作る。外側の
+    <div class="card ...">と<span class="badge">は含まない
+    (badge/kind_classはその時々の役割(今日/1週間前/...)で変わるため、
+    呼び出し側で被せる。カレンダー機能用に、日付を選ばずJSでも
+    このHTMLをそのまま再利用できるようにするための分離)。"""
     dekita_items = list_items(sections.get("dekita", ""))
     dekita_html = "\n".join(f"    <li>{md_bold(x)}</li>" for x in dekita_items)
 
-    blocks = [f'''    <div class="card {kind_class}">
-      <span class="badge">{badge}</span>
-      <div class="date">{date_jp(d)}</div>
+    blocks = [f'''      <div class="date">{date_jp(d)}</div>
       <ul class="dekita">
 {dekita_html}
       </ul>''']
@@ -259,8 +262,15 @@ def render_card(kind_class, badge, d, sections):
     if sections.get("summary"):
         blocks.append(f'      <p class="summary-line">{esc(sections["summary"])}</p>')
 
-    blocks.append("    </div>")
     return "\n".join(blocks)
+
+
+def render_card(kind_class, badge, d, sections):
+    body = render_card_body(d, sections)
+    return f'''    <div class="card {kind_class}">
+      <span class="badge">{badge}</span>
+{body}
+    </div>'''
 
 
 def render_message_card(sections):
@@ -440,10 +450,20 @@ def build_page(anchor=None):
             continue
         entries_html.append(render_entry(d, sections, open_=(i == 0)))
 
+    # カレンダー機能(2026-08-27追加)用: 全日記のカード本体をJSONで埋め込み、
+    # クリック側で「選んだ日を起点に1週間前/1ヶ月前/1年前」を組み替えられる
+    # ようにする(Pythonのrender_card_body()をそのまま使い回すので、
+    # 表示ロジックの二重管理にならない)。
+    calendar_data = {d.isoformat(): render_card_body(d, load_existing(d)) for d in all_days}
+    calendar_json = json.dumps(calendar_data, ensure_ascii=False).replace("</script>", "<\\/script>")
+
     shell = open(SHELL_PATH, encoding="utf-8").read()
     title_start = shell.find("<title>")
     out = shell[title_start:]
     out = out.replace("{{TODAY_DATE_JP}}", date_jp(today))
+    out = out.replace("{{TODAY_DATE_ISO}}", today.isoformat())
+    out = out.replace("{{FIRST_DATE_ISO}}", all_days[-1].isoformat())
+    out = out.replace("{{DIARY_CALENDAR_JSON}}", calendar_json)
     out = out.replace("{{DIARY_COUNT}}", str(len(all_days)))
     out = out.replace("{{FIRST_DATE_JP}}", date_jp(all_days[-1]))
     out = out.replace("  <!-- MESSAGE_CARD -->\n", message_card)

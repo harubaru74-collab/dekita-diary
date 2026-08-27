@@ -16,6 +16,11 @@
     <!-- YEAR_CARD -->    → 1年前のカードのHTML（1つ）
     <!-- ARCHIVE_ENTRIES --> → これまでの全日記を新しい順に<details>で並べたもの
 
+  カレンダー機能(2026-08-27追加)用プレースホルダー：
+    {{TODAY_DATE_ISO}}       → "2026-08-27" (今日の日付、date input の value/max用)
+    {{FIRST_DATE_ISO}}       → "2026-08-16" (一番古い日記の日付、date input の min用)
+    {{DIARY_CALENDAR_JSON}}  → 全日記のカード本体HTMLをまとめたJSON(日付選択時にJSが読む)
+
   詳しい変換ルール・カードのHTML構造は archive/BUILD.md を参照。
 
   このページはGitHub Pagesとして公開される＝URLを知っていれば誰でも見られる。
@@ -253,7 +258,8 @@
   .entry-body details summary::before { content: "▸ "; }
   .card details[open] summary::before,
   .entry-body details[open] summary::before { content: "▾ "; }
-  .card details .body-text {
+  .card details .body-text,
+  .card .body-text {
     margin-top: 0.5em;
     color: var(--ink);
     white-space: pre-wrap;
@@ -357,6 +363,37 @@
     font-size: 0.95em;
   }
 
+  /* カレンダー機能(2026-08-27追加): 好きな日を選んで振り返れる日付ピッカー */
+  .date-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6em;
+    margin-bottom: 1.75rem;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+  }
+  .date-nav input[type="date"] {
+    font: inherit;
+    color: var(--ink);
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 0.35em 0.6em;
+  }
+  .date-nav button {
+    font: inherit;
+    font-weight: 600;
+    color: var(--leaf-ink);
+    background: var(--leaf);
+    border: none;
+    border-radius: 999px;
+    padding: 0.4em 1em;
+    cursor: pointer;
+  }
+  .date-nav button:hover { background: var(--sun); }
+
   footer.page-footer {
     text-align: center;
     color: var(--ink-soft);
@@ -420,13 +457,21 @@
 <div class="wrap">
   <header class="hero">
     <span class="kicker">🌱 できたこと日記</span>
-    <h1>{{TODAY_DATE_JP}} の成長のあしあと</h1>
+    <h1 id="page-title">{{TODAY_DATE_JP}} の成長のあしあと</h1>
     <p class="sub">今日・1週間前・1ヶ月前・1年前の「できたこと」を並べて、積み重ねを見える化する場所</p>
   </header>
 
-  <!-- MESSAGE_CARD -->
+  <div class="date-nav">
+    <label for="date-picker">📅 見たい日を選ぶ：</label>
+    <input type="date" id="date-picker" value="{{TODAY_DATE_ISO}}" min="{{FIRST_DATE_ISO}}" max="{{TODAY_DATE_ISO}}">
+    <button type="button" id="date-reset">今日に戻す</button>
+  </div>
 
-  <div class="cards">
+  <div id="message-card-slot">
+    <!-- MESSAGE_CARD -->
+  </div>
+
+  <div class="cards" id="cards-slot">
     <!-- TODAY_CARD -->
     <!-- WEEK_CARD -->
     <!-- MONTH_CARD -->
@@ -451,4 +496,77 @@
       navigator.serviceWorker.register('sw.js').catch(() => {});
     });
   }
+</script>
+
+<script type="application/json" id="diary-calendar-data">{{DIARY_CALENDAR_JSON}}</script>
+<script>
+  // カレンダー機能(2026-08-27追加): 好きな日を選ぶと、その日を起点に
+  // 1週間前/1ヶ月前/1年前を組み替えて表示する。サーバー側(Python)が
+  // 全日記のカード本体HTMLを埋め込んでおくので、ここでは日付計算と
+  // 差し替えだけを行う(表示ロジックの二重管理を避けるため)。
+  (function () {
+    var REAL_TODAY = '{{TODAY_DATE_ISO}}';
+    var dataEl = document.getElementById('diary-calendar-data');
+    var CARD_BODIES = {};
+    try { CARD_BODIES = JSON.parse(dataEl.textContent || '{}'); } catch (e) { CARD_BODIES = {}; }
+
+    var picker = document.getElementById('date-picker');
+    var resetBtn = document.getElementById('date-reset');
+    var cardsSlot = document.getElementById('cards-slot');
+    var messageSlot = document.getElementById('message-card-slot');
+    var titleEl = document.getElementById('page-title');
+    if (!picker || !cardsSlot) return;
+
+    var WEEKDAY_JP = ['日', '月', '火', '水', '木', '金', '土'];
+
+    function addDays(iso, delta) {
+      var d = new Date(iso + 'T00:00:00');
+      d.setDate(d.getDate() + delta);
+      return d.toISOString().slice(0, 10);
+    }
+
+    function formatJP(iso) {
+      var d = new Date(iso + 'T00:00:00');
+      return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WEEKDAY_JP[d.getDay()] + '）';
+    }
+
+    function cardHTML(kindClass, badge, iso, isToday) {
+      var body = CARD_BODIES[iso];
+      if (body) {
+        return '<div class="card ' + kindClass + '"><span class="badge">' + badge + '</span>' + body + '</div>';
+      }
+      var emoji = isToday ? '📝' : '🌱';
+      var msg = isToday
+        ? '今日の分はまだ届いていないよ<br>書いたら次回の自動更新で反映されるよ'
+        : 'まだ記録がないよ<br>これからの積み重ねが楽しみだね';
+      var cls = 'card empty' + (isToday ? ' today' : '');
+      return '<div class="' + cls + '"><span class="badge">' + badge + '</span><div class="emoji">' + emoji + '</div><p>' + msg + '</p></div>';
+    }
+
+    function render(iso) {
+      var isRealToday = iso === REAL_TODAY;
+      cardsSlot.innerHTML =
+        cardHTML('today', isRealToday ? '今日' : '選んだ日', iso, isRealToday) +
+        cardHTML('week', '1週間前', addDays(iso, -7), false) +
+        cardHTML('month', '1ヶ月前', addDays(iso, -30), false) +
+        cardHTML('year', '1年前', addDays(iso, -365), false);
+
+      if (titleEl) {
+        titleEl.textContent = formatJP(iso) + (isRealToday ? ' の成長のあしあと' : ' を起点に振り返る');
+      }
+      if (messageSlot) {
+        messageSlot.style.display = isRealToday ? '' : 'none';
+      }
+    }
+
+    picker.addEventListener('change', function () {
+      if (picker.value) render(picker.value);
+    });
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        picker.value = REAL_TODAY;
+        render(REAL_TODAY);
+      });
+    }
+  })();
 </script>
