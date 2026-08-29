@@ -333,15 +333,22 @@
   }
 
   /* カレンダー機能(2026-08-27追加): 好きな日を選んで振り返れる日付ピッカー */
+  /* 2026-08-29: 上段=カレンダー、下段=◀ 今日に戻す ▶ の2段レイアウトに整理 */
   .date-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6em;
+    margin-bottom: 1.75rem;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+  }
+  .date-nav-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: 0.6em;
-    margin-bottom: 1.75rem;
-    font-size: 0.9rem;
-    color: var(--ink-soft);
   }
   .date-nav input[type="date"] {
     font: inherit;
@@ -360,11 +367,12 @@
     border-radius: 999px;
     padding: 0.4em 1em;
     cursor: pointer;
+    touch-action: manipulation;
   }
   .date-nav button:hover { background: var(--sun); }
   .date-nav button.day-step {
-    width: 2.4em;
-    height: 2.4em;
+    width: 2.6em;
+    height: 2.6em;
     padding: 0;
     display: inline-flex;
     align-items: center;
@@ -445,11 +453,15 @@
   </header>
 
   <div class="date-nav">
-    <label for="date-picker">📅 見たい日を選ぶ：</label>
-    <button type="button" id="date-prev" class="day-step" aria-label="前の日">◀</button>
-    <input type="date" id="date-picker" value="2026-08-29" min="2026-08-16" max="2026-08-29">
-    <button type="button" id="date-next" class="day-step" aria-label="次の日">▶</button>
-    <button type="button" id="date-reset">今日に戻す</button>
+    <div class="date-nav-row">
+      <label for="date-picker">📅 見たい日を選ぶ：</label>
+      <input type="date" id="date-picker" value="2026-08-29" min="2026-08-16" max="2026-08-29">
+    </div>
+    <div class="date-nav-row">
+      <button type="button" id="date-prev" class="day-step" aria-label="前の日">◀</button>
+      <button type="button" id="date-reset">今日に戻す</button>
+      <button type="button" id="date-next" class="day-step" aria-label="次の日">▶</button>
+    </div>
   </div>
 
   <div id="message-card-slot">
