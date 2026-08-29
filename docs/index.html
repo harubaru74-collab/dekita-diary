@@ -934,8 +934,13 @@ LINEをブラッシュアップする過程で「AIの助言だけでなく自�
     var WEEKDAY_JP = ['日', '月', '火', '水', '木', '金', '土'];
 
     function addDays(iso, delta) {
-      var d = new Date(iso + 'T00:00:00');
-      d.setDate(d.getDate() + delta);
+      // UTC+9(日本時間)など、UTCより進んでいるタイムゾーンだと、
+      // ローカル時刻で作ったDateをtoISOString()(UTC基準)で文字列化すると
+      // 日付が1日ずれる(例:+1日のつもりが同じ日になる)バグがあったため、
+      // 生成〜計算〜文字列化を全部UTC基準に統一する(2026-08-29修正)。
+      var parts = iso.split('-').map(Number);
+      var d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+      d.setUTCDate(d.getUTCDate() + delta);
       return d.toISOString().slice(0, 10);
     }
 
