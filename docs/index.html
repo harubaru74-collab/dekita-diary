@@ -1004,6 +1004,31 @@ LINEをブラッシュアップする過程で「AIの助言だけでなく自�
     if (nextBtn) {
       nextBtn.addEventListener('click', function () { step(1); });
     }
+
+    // スワイプでの日付移動(2026-08-29追加): カード部分を左右に指で
+    // 払うと、矢印ボタンと同じく1日ずつ移動する。縦スクロールを
+    // 邪魔しないよう、横方向の移動が縦方向よりはっきり大きい時だけ
+    // スワイプとして扱う(preventDefaultはしないので通常の縦スクロールは
+    // そのまま効く)。
+    (function () {
+      var startX = null, startY = null;
+      var SWIPE_MIN_DX = 48;
+      cardsSlot.addEventListener('touchstart', function (e) {
+        if (e.touches.length !== 1) { startX = null; return; }
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+      }, { passive: true });
+      cardsSlot.addEventListener('touchend', function (e) {
+        if (startX === null) return;
+        var t = e.changedTouches[0];
+        var dx = t.clientX - startX;
+        var dy = t.clientY - startY;
+        startX = null;
+        if (Math.abs(dx) < SWIPE_MIN_DX || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        step(dx < 0 ? 1 : -1); // 左へ払う→次の日、右へ払う→前の日
+      }, { passive: true });
+    })();
+
     render(picker.value || REAL_TODAY);
   })();
 </script>
