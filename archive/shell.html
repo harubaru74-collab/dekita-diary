@@ -393,6 +393,20 @@
     cursor: pointer;
   }
   .date-nav button:hover { background: var(--sun); }
+  .date-nav button.day-step {
+    width: 2.4em;
+    height: 2.4em;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05em;
+  }
+  .date-nav button.day-step:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: var(--leaf);
+  }
 
   footer.page-footer {
     text-align: center;
@@ -463,7 +477,9 @@
 
   <div class="date-nav">
     <label for="date-picker">📅 見たい日を選ぶ：</label>
+    <button type="button" id="date-prev" class="day-step" aria-label="前の日">◀</button>
     <input type="date" id="date-picker" value="{{TODAY_DATE_ISO}}" min="{{FIRST_DATE_ISO}}" max="{{TODAY_DATE_ISO}}">
+    <button type="button" id="date-next" class="day-step" aria-label="次の日">▶</button>
     <button type="button" id="date-reset">今日に戻す</button>
   </div>
 
@@ -512,6 +528,8 @@
 
     var picker = document.getElementById('date-picker');
     var resetBtn = document.getElementById('date-reset');
+    var prevBtn = document.getElementById('date-prev');
+    var nextBtn = document.getElementById('date-next');
     var cardsSlot = document.getElementById('cards-slot');
     var messageSlot = document.getElementById('message-card-slot');
     var titleEl = document.getElementById('page-title');
@@ -557,6 +575,17 @@
       if (messageSlot) {
         messageSlot.style.display = isRealToday ? '' : 'none';
       }
+      if (prevBtn) prevBtn.disabled = !!picker.min && iso <= picker.min;
+      if (nextBtn) nextBtn.disabled = !!picker.max && iso >= picker.max;
+    }
+
+    function step(delta) {
+      if (!picker.value) return;
+      var next = addDays(picker.value, delta);
+      if (picker.min && next < picker.min) next = picker.min;
+      if (picker.max && next > picker.max) next = picker.max;
+      picker.value = next;
+      render(next);
     }
 
     picker.addEventListener('change', function () {
@@ -568,5 +597,12 @@
         render(REAL_TODAY);
       });
     }
+    if (prevBtn) {
+      prevBtn.addEventListener('click', function () { step(-1); });
+    }
+    if (nextBtn) {
+      nextBtn.addEventListener('click', function () { step(1); });
+    }
+    render(picker.value || REAL_TODAY);
   })();
 </script>

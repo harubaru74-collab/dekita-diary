@@ -105,6 +105,11 @@
 で日付を選ぶと、その日を起点に7日前/30日前/365日前を計算し直して4枚を
 再表示する。「今日に戻す」ボタン（`#date-reset`）で元に戻る。
 
+- 日付ピッカーの両脇に「◀」「▶」ボタン（`#date-prev` / `#date-next`、
+  2026-08-29追加）があり、1日ずつ前後に移動できる。一番古い日記の日付
+  （`{{FIRST_DATE_ISO}}`）より前、または今日（`{{TODAY_DATE_ISO}}`）より
+  後には移動できないよう、ボタンが自動でdisabledになる。
+
 - Python側は `render_card_body()` で全日記分の「カード本体HTML」（日付・でき
   たこと・詳細部分。外側の`<div class="card ...">`とbadgeは含まない）を作り、
   `{{DIARY_CALENDAR_JSON}}` として`<script type="application/json" id="diary-
