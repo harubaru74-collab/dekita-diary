@@ -68,7 +68,7 @@ def list_diary_files(service):
     while True:
         resp = service.files().list(
             q=f"'{FOLDER_ID}' in parents and trashed = false",
-            fields="nextPageToken, files(id, name, mimeType)",
+            fields="nextPageToken, files(id, name, mimeType, modifiedTime)",
             pageSize=200,
             pageToken=page_token,
         ).execute()
@@ -211,6 +211,38 @@ def date_jp(d):
 
 def diary_path(d):
     return os.path.join(DIARY_DIR, f"{d.isoformat()}.md")
+
+
+# ---------------------------------------------------------------------------
+# 同期状態の記録(2026-09-05追加)
+#
+# 「diary/にその日付のファイルが既にあるかどうか」だけでは、Google Drive側で
+# 後から内容を書き直したり、間違った日付のファイル名を正しい日付に直したり
+# した変更を検知できない(前回の同期時点の状態と比べようがないため)。
+# そこで、前回同期した各日付のDriveファイルID・更新日時を
+# diary/.sync_manifest.json に記録しておき、次回はそれと比較して
+# 「変わっていたら再取得」「Drive側から消えていたらローカルも削除」を
+# 判断できるようにする。
+# ---------------------------------------------------------------------------
+
+MANIFEST_PATH = os.path.join(DIARY_DIR, ".sync_manifest.json")
+
+
+def load_manifest():
+    if not os.path.exists(MANIFEST_PATH):
+        return {}
+    try:
+        with open(MANIFEST_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_manifest(manifest):
+    os.makedirs(DIARY_DIR, exist_ok=True)
+    with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2, sort_keys=True)
+        f.write("\n")
 
 
 # ---------------------------------------------------------------------------
@@ -371,10 +403,12 @@ def load_existing(d):
 
 
 def save_diary_file(d, raw_text, title_hint):
+    """diary/YYYY-MM-DD.md として保存する(常に上書き)。
+    「既にあればスキップ」の判断は呼び出し側(sync_all_diary_files)が
+    .sync_manifest.json と比べて行うので、ここでは常に書き込む
+    (2026-09-05、内容の修正や日付の訂正が反映されない不具合を修正)。"""
     os.makedirs(DIARY_DIR, exist_ok=True)
     path = diary_path(d)
-    if os.path.exists(path):
-        return False
     header = f"# {d.isoformat()} のできごと\n\n"
     body = normalize_text(raw_text)
     # 既にトップの`#`見出しが入っている場合は二重に付けない
@@ -384,26 +418,66 @@ def save_diary_file(d, raw_text, title_hint):
         content = header + body
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
-    return True
 
 
 def sync_all_diary_files(service):
-    """Google Driveの日記フォルダ全体をスキャンし、diary/にまだ無い日付が
-    あれば全部バックアップする。「今日」だけでなく、書き忘れて後から
-    まとめて投稿した過去日の日記も、これで確実に拾われるようになる
-    (2026-08-27、「昨日の分を書いたのにサイトに反映されない」という
-    フィードバックを受けて、今日/7日前/30日前/365日前の4点だけを
-    見に行く方式から、フォルダ全体の同期に変更した)。
-    戻り値: 新しく保存できた日付のリスト。"""
+    """Google Driveの日記フォルダ全体をスキャンし、diary/を最新化する。
+
+    - 新しい日付のファイルは保存する。「今日」だけでなく、書き忘れて
+      後からまとめて投稿した過去日の日記も、これで確実に拾われる
+      (2026-08-27、「昨日の分を書いたのにサイトに反映されない」という
+      フィードバックを受けて、今日/7日前/30日前/365日前の4点だけを
+      見に行く方式から、フォルダ全体の同期に変更した)。
+    - 既にdiary/にある日付でも、前回同期時からDrive側のファイルID・
+      更新日時が変わっていれば再取得して上書きする(2026-09-05追加。
+      以前は「diary/に既にあればスキップ」だったため、後から内容を
+      修正したり、間違った日付のファイル名を書き直したりしても
+      サイトに反映されないという不具合があった)。
+    - 前回同期時にはあったのに、今回のフォルダの中に同じ日付のファイルが
+      見当たらなくなった場合(=ファイル名の日付を書き直して別の日付に
+      なった、またはファイルが削除された)は、ローカルのdiary/ファイルも
+      削除する。ただし対象は前回このスクリプトが同期して記録した日付
+      (.sync_manifest.json にある日付)だけで、Driveのタイトルと1対1で
+      対応しない初期移行データには絶対に触れない。
+
+    戻り値: (更新した日付のリスト, 削除した日付のリスト)。
+    """
     drive_files = list_diary_files(service)
-    saved = []
+    manifest = load_manifest()
+    new_manifest = {}
+    updated = []
+
     for d, file in drive_files.items():
-        if os.path.exists(diary_path(d)):
+        key = d.isoformat()
+        mtime = file.get("modifiedTime", "")
+        new_manifest[key] = {"id": file["id"], "modifiedTime": mtime}
+        prev = manifest.get(key)
+        needs_sync = (
+            not os.path.exists(diary_path(d))
+            or prev is None
+            or prev.get("id") != file["id"]
+            or prev.get("modifiedTime") != mtime
+        )
+        if needs_sync:
+            raw = download_text(service, file)
+            save_diary_file(d, raw, file["name"])
+            updated.append(d)
+
+    removed = []
+    for key in manifest:
+        if key in new_manifest:
             continue
-        raw = download_text(service, file)
-        if save_diary_file(d, raw, file["name"]):
-            saved.append(d)
-    return saved
+        try:
+            d = datetime.date.fromisoformat(key)
+        except ValueError:
+            continue
+        path = diary_path(d)
+        if os.path.exists(path):
+            os.remove(path)
+            removed.append(d)
+
+    save_manifest(new_manifest)
+    return updated, removed
 
 
 def build_page(anchor=None):
@@ -483,11 +557,13 @@ def main():
     service = get_drive_service()
     today = datetime.date.today()
 
-    saved_dates = sync_all_diary_files(service)
-    if saved_dates:
-        print(f"新規保存: {', '.join(d.isoformat() for d in sorted(saved_dates))}")
+    updated_dates, removed_dates = sync_all_diary_files(service)
+    if updated_dates:
+        print(f"更新: {', '.join(d.isoformat() for d in sorted(updated_dates))}")
+    if removed_dates:
+        print(f"削除(Drive側で日付訂正/削除): {', '.join(d.isoformat() for d in sorted(removed_dates))}")
 
-    if not os.path.exists(diary_path(today)) and today not in saved_dates:
+    if not os.path.exists(diary_path(today)) and today not in updated_dates:
         print(f"{today.isoformat()} の日記はまだ見つかりません。")
 
     # 新しい日記が1件も無い場合でも、日付の表示を最新に保つため
