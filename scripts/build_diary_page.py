@@ -3,12 +3,11 @@
 できたこと日記 成長可視化ページ ビルドスクリプト
 
 やること:
-  1. Google Drive の「できたこと日記」フォルダから、今日の日記を検索する。
-     まだ無ければ何もせず終了する(=次回のGitHub Actions実行でまた確認する)。
-  2. 今日の日記が見つかったら、diary/YYYY-MM-DD.md として保存する
-     (既に保存済みならスキップ)。
-  3. 7日前・30日前・365日前の日記も、diary/ に無ければGoogle Driveから取得して保存する。
-  4. diary/*.md を全部読み込み、archive/shell.html を土台に
+  1. Google Drive の「できたこと日記」フォルダの中身を最新化する
+     (diary/*.md。sync_all_diary_files()参照)。
+  2. 同じフォルダにある月間レポート(タイトルに「月間レポート」を含む
+     ファイル)も最新化する(monthly/*.md。sync_monthly_reports()参照)。
+  3. diary/*.md・monthly/*.md を全部読み込み、archive/shell.html を土台に
      docs/index.html (GitHub Pagesが配信するページ)を再構築する。
 
 前提:
@@ -142,19 +141,8 @@ HEADER_MAP = {
 
 
 def parse_diary(text):
-    """`## 見出し` ごとにセクションへ分割する。"""
-    body = "\n" + text
-    parts = re.split(r"\n#{1,2}\s+", body)
-    sections = {}
-    for part in parts[1:]:
-        lines = part.split("\n", 1)
-        header = lines[0].strip()
-        content = lines[1].strip() if len(lines) > 1 else ""
-        for key, needles in HEADER_MAP.items():
-            if any(n in header for n in needles):
-                sections[key] = content
-                break
-    return sections
+    """`## 見出し` ごとにセクションへ分割する(実処理はsplit_sections()を参照)。"""
+    return split_sections(text, HEADER_MAP)
 
 
 def list_items(text):
@@ -228,19 +216,19 @@ def diary_path(d):
 MANIFEST_PATH = os.path.join(DIARY_DIR, ".sync_manifest.json")
 
 
-def load_manifest():
-    if not os.path.exists(MANIFEST_PATH):
+def load_manifest(path):
+    if not os.path.exists(path):
         return {}
     try:
-        with open(MANIFEST_PATH, encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, ValueError):
         return {}
 
 
-def save_manifest(manifest):
-    os.makedirs(DIARY_DIR, exist_ok=True)
-    with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
+def save_manifest(path, manifest):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2, sort_keys=True)
         f.write("\n")
 
@@ -443,7 +431,7 @@ def sync_all_diary_files(service):
     戻り値: (更新した日付のリスト, 削除した日付のリスト)。
     """
     drive_files = list_diary_files(service)
-    manifest = load_manifest()
+    manifest = load_manifest(MANIFEST_PATH)
     new_manifest = {}
     updated = []
 
@@ -476,8 +464,183 @@ def sync_all_diary_files(service):
             os.remove(path)
             removed.append(d)
 
-    save_manifest(new_manifest)
+    save_manifest(MANIFEST_PATH, new_manifest)
     return updated, removed
+
+
+# ---------------------------------------------------------------------------
+# 月間レポート(2026-09-06追加)
+#
+# 「今月の成長ハイライト」「価値観・軸」「エピソードの原石」「チャッピーからの
+# 月間総括メッセージ」をまとめたレポート。日々の日記と違い、月末などの
+# 節目にはるかちゃんがCowork(Claude)へ依頼して生成してもらい、Google Drive
+# の同じフォルダにタイトル「YYYY-MM 月間レポート」で保存する運用にする。
+#
+# なぜGitHub Actions側でLLM解析を自動実行しないか:
+#   毎日の自動更新パイプラインはGoogle Drive→静的サイト生成だけで完結して
+#   おり、Claude/LLM APIのトークンを一切消費しない設計になっている
+#   (README「公開範囲について」参照)。GAS等から毎月LLM APIを呼ぶ設計も
+#   可能だが、新たなAPIキーの管理・費用が発生するうえ、既存の「Coworkと
+#   話して日記を書く」運用ともズレる。そのため月間レポートも「Coworkと
+#   話して生成→Google Driveに保存」という日々の日記と同じ運用に乗せ、
+#   このスクリプトは生成済みレポートを拾って表示するだけにしている。
+# ---------------------------------------------------------------------------
+
+MONTHLY_DIR = os.path.join(REPO_ROOT, "monthly")
+MONTHLY_MANIFEST_PATH = os.path.join(MONTHLY_DIR, ".sync_manifest.json")
+MONTH_IN_NAME = re.compile(r"(\d{4})-(\d{2})")
+
+MONTHLY_HEADER_MAP = {
+    "highlights": ("成長ハイライト",),
+    "values": ("価値観", "軸"),
+    "episodes": ("エピソード",),
+    "chappy_summary": ("チャッピーからの", "総括"),
+}
+
+
+def monthly_path(month_str):
+    return os.path.join(MONTHLY_DIR, f"{month_str}.md")
+
+
+def list_monthly_reports(service):
+    """フォルダ内の月間レポートファイルを全部リストする。タイトルに
+    「月間レポート」または「月次レポート」を含むものだけを対象にする
+    (日々の日記の判定条件「のできごと」「できたこと日記」とは重ならない
+    ので、同じフォルダに混在していても取り違えない)。"""
+    files = []
+    page_token = None
+    while True:
+        resp = service.files().list(
+            q=f"'{FOLDER_ID}' in parents and trashed = false",
+            fields="nextPageToken, files(id, name, mimeType, modifiedTime)",
+            pageSize=200,
+            pageToken=page_token,
+        ).execute()
+        files.extend(resp.get("files", []))
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            break
+
+    result = {}
+    for f in files:
+        name = f["name"]
+        if not ("月間レポート" in name or "月次レポート" in name):
+            continue
+        m = MONTH_IN_NAME.search(name)
+        if not m:
+            continue
+        result[f"{m.group(1)}-{m.group(2)}"] = f
+    return result
+
+
+def sync_monthly_reports(service):
+    """月間レポートを同期する。考え方はsync_all_diary_files()と同じ
+    (前回同期時の状態と比較して、変わっていれば再取得、Drive側から
+    見当たらなくなっていれば削除)。
+    戻り値: (更新した月のリスト, 削除した月のリスト)。"""
+    drive_files = list_monthly_reports(service)
+    manifest = load_manifest(MONTHLY_MANIFEST_PATH)
+    new_manifest = {}
+    updated = []
+
+    for month_str, file in drive_files.items():
+        mtime = file.get("modifiedTime", "")
+        new_manifest[month_str] = {"id": file["id"], "modifiedTime": mtime}
+        prev = manifest.get(month_str)
+        needs_sync = (
+            not os.path.exists(monthly_path(month_str))
+            or prev is None
+            or prev.get("id") != file["id"]
+            or prev.get("modifiedTime") != mtime
+        )
+        if needs_sync:
+            raw = download_text(service, file)
+            os.makedirs(MONTHLY_DIR, exist_ok=True)
+            with open(monthly_path(month_str), "w", encoding="utf-8") as out:
+                out.write(normalize_text(raw))
+            updated.append(month_str)
+
+    removed = []
+    for month_str in manifest:
+        if month_str in new_manifest:
+            continue
+        path = monthly_path(month_str)
+        if os.path.exists(path):
+            os.remove(path)
+            removed.append(month_str)
+
+    save_manifest(MONTHLY_MANIFEST_PATH, new_manifest)
+    return updated, removed
+
+
+def split_sections(text, header_map):
+    """`## 見出し`(または`# 見出し`)ごとにテキストを分割し、header_mapに
+    書かれたキーワードにマッチする見出しの中身をセクションとして拾う。
+    parse_diary()・parse_monthly_report()の共通処理。"""
+    body = "\n" + text
+    parts = re.split(r"\n#{1,2}\s+", body)
+    sections = {}
+    for part in parts[1:]:
+        lines = part.split("\n", 1)
+        header = lines[0].strip()
+        content = lines[1].strip() if len(lines) > 1 else ""
+        for key, needles in header_map.items():
+            if any(n in header for n in needles):
+                sections[key] = content
+                break
+    return sections
+
+
+def parse_monthly_report(text):
+    """月間レポートMarkdownを、タイトル行(`# 見出し`)と各セクションに分ける。"""
+    title_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
+    title = title_match.group(1).strip() if title_match else ""
+    sections = split_sections(text, MONTHLY_HEADER_MAP)
+    return title, sections
+
+
+def render_monthly_report_body(title, sections):
+    """月間レポートカードの中身HTMLを作る。render_card_body()と同じ考え方で、
+    外側の<div class="card ...">は含まない(JS側でも使い回すため)。"""
+    blocks = [f'      <div class="monthly-title">{esc(title)}</div>'] if title else []
+
+    highlight_items = list_items(sections.get("highlights", ""))
+    if highlight_items:
+        lis = "\n".join(f"        <li>{md_bold(x)}</li>" for x in highlight_items)
+        blocks.append(f'''      <div class="monthly-section">
+        <h4>🌟 今月の成長ハイライト</h4>
+        <ul>
+{lis}
+        </ul>
+      </div>''')
+
+    value_items = list_items(sections.get("values", ""))
+    if value_items:
+        lis = "\n".join(f"        <li>{md_bold(x)}</li>" for x in value_items)
+        blocks.append(f'''      <div class="monthly-section">
+        <h4>💎 大切にしている価値観・軸</h4>
+        <ul>
+{lis}
+        </ul>
+      </div>''')
+
+    episode_lines = [l for l in sections.get("episodes", "").split("\n") if l.strip()]
+    if episode_lines:
+        paras = "\n".join(f"        <p>{md_bold(l.strip())}</p>" for l in episode_lines)
+        blocks.append(f'''      <div class="monthly-section">
+        <h4>💼 エピソードの原石</h4>
+{paras}
+      </div>''')
+
+    chappy_paras = [p.strip() for p in re.split(r"\n\s*\n", sections.get("chappy_summary", "")) if p.strip()]
+    if chappy_paras:
+        paras = "\n".join(f"        <p>{md_bold(p)}</p>" for p in chappy_paras)
+        blocks.append(f'''      <div class="monthly-section chappy">
+        <h4>🔥 チャッピーからの月間総括メッセージ</h4>
+{paras}
+      </div>''')
+
+    return "\n".join(blocks)
 
 
 def build_page(anchor=None):
@@ -531,6 +694,21 @@ def build_page(anchor=None):
     calendar_data = {d.isoformat(): render_card_body(d, load_existing(d)) for d in all_days}
     calendar_json = json.dumps(calendar_data, ensure_ascii=False).replace("</script>", "<\\/script>")
 
+    # 月間レポート機能(2026-09-06追加)用: monthly/*.md を全部読み込み、
+    # 月ごとのカード本体HTMLをJSONで埋め込む(1件も無ければ空オブジェクト)。
+    monthly_reports = {}
+    if os.path.isdir(MONTHLY_DIR):
+        for name in sorted(os.listdir(MONTHLY_DIR)):
+            if not name.endswith(".md"):
+                continue
+            month_str = name[:-3]
+            if not re.fullmatch(r"\d{4}-\d{2}", month_str):
+                continue
+            with open(os.path.join(MONTHLY_DIR, name), encoding="utf-8") as f:
+                title, sections = parse_monthly_report(f.read())
+            monthly_reports[month_str] = render_monthly_report_body(title, sections)
+    monthly_report_json = json.dumps(monthly_reports, ensure_ascii=False).replace("</script>", "<\\/script>")
+
     shell = open(SHELL_PATH, encoding="utf-8").read()
     title_start = shell.find("<title>")
     out = shell[title_start:]
@@ -538,6 +716,7 @@ def build_page(anchor=None):
     out = out.replace("{{TODAY_DATE_ISO}}", today.isoformat())
     out = out.replace("{{FIRST_DATE_ISO}}", all_days[-1].isoformat())
     out = out.replace("{{DIARY_CALENDAR_JSON}}", calendar_json)
+    out = out.replace("{{MONTHLY_REPORT_JSON}}", monthly_report_json)
     out = out.replace("{{DIARY_COUNT}}", str(len(all_days)))
     out = out.replace("{{FIRST_DATE_JP}}", date_jp(all_days[-1]))
     out = out.replace("  <!-- MESSAGE_CARD -->\n", message_card)
@@ -565,6 +744,12 @@ def main():
 
     if not os.path.exists(diary_path(today)) and today not in updated_dates:
         print(f"{today.isoformat()} の日記はまだ見つかりません。")
+
+    updated_months, removed_months = sync_monthly_reports(service)
+    if updated_months:
+        print(f"月間レポート更新: {', '.join(sorted(updated_months))}")
+    if removed_months:
+        print(f"月間レポート削除(Drive側で見当たらず): {', '.join(sorted(removed_months))}")
 
     # 新しい日記が1件も無い場合でも、日付の表示を最新に保つため
     # (日付をまたいだ後の最初の実行で「今日」ラベルを更新する目的)、

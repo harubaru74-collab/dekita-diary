@@ -17,6 +17,7 @@ Google CloudサービスアカウントとGitHub側の設定が必要。手順�
 ## このリポジトリの役割
 
 - `diary/` … 日記本文(Markdown、原文のまま)。2026-08-16〜08-24分は初期移行データ
+- `monthly/` … 月間レポート本文(Markdown、2026-09-06追加、任意)。Coworkに依頼して生成し、Google Driveに保存したものを自動反映する
 - `docs/` … GitHub Pagesが配信する成長可視化ページ本体
   - `index.html` … 自動生成されるページ本体(手で編集しないこと)
   - `manifest.json` / `sw.js` / `icons/` … PWA化(2026-08-25追加)のための静的ファイル。スクリプトの再生成対象外

@@ -385,6 +385,105 @@
     background: var(--leaf);
   }
 
+  /* 月間レポート機能(2026-09-06追加) */
+  .monthly-toggle-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+  .monthly-toggle-btn {
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--sky);
+    background: color-mix(in srgb, var(--sky) 14%, var(--card));
+    border: 1px solid color-mix(in srgb, var(--sky) 35%, var(--card-border));
+    border-radius: 999px;
+    padding: 0.5em 1.2em;
+    cursor: pointer;
+  }
+  .monthly-toggle-btn:hover {
+    background: color-mix(in srgb, var(--sky) 22%, var(--card));
+  }
+
+  .monthly-panel {
+    margin-bottom: 1.75rem;
+  }
+  .monthly-panel-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6em;
+    margin-bottom: 0.9em;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+  }
+  .monthly-panel-header select {
+    font: inherit;
+    color: var(--ink);
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 0.35em 0.6em;
+  }
+
+  .monthly-card {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--sky) 12%, var(--card)), var(--card));
+    border: 1px solid color-mix(in srgb, var(--sky) 30%, var(--card-border));
+  }
+  .monthly-card .monthly-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.9em;
+  }
+  .monthly-card .monthly-section {
+    margin-bottom: 1.2em;
+  }
+  .monthly-card .monthly-section:last-child {
+    margin-bottom: 0;
+  }
+  .monthly-card .monthly-section h4 {
+    font-size: 0.95rem;
+    margin: 0 0 0.6em;
+  }
+  .monthly-card .monthly-section ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.92rem;
+  }
+  .monthly-card .monthly-section ul li {
+    position: relative;
+    padding-left: 1.3em;
+    margin-bottom: 0.55em;
+  }
+  .monthly-card .monthly-section ul li::before {
+    content: "✨";
+    position: absolute;
+    left: 0;
+    top: 0.05em;
+    font-size: 0.85em;
+  }
+  .monthly-card .monthly-section p {
+    margin: 0 0 0.7em;
+    font-size: 0.92rem;
+  }
+  .monthly-card .monthly-section p:last-child {
+    margin-bottom: 0;
+  }
+  .monthly-card .monthly-section.chappy {
+    padding: 0.9em 1em;
+    background: color-mix(in srgb, var(--sun) 12%, transparent);
+    border-radius: 12px;
+  }
+  .monthly-empty {
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+    text-align: center;
+    margin: 0;
+  }
+
   footer.page-footer {
     text-align: center;
     color: var(--ink-soft);
@@ -462,6 +561,18 @@
       <button type="button" id="date-reset">今日に戻す</button>
       <button type="button" id="date-next" class="day-step" aria-label="次の日">▶</button>
     </div>
+  </div>
+
+  <div class="monthly-toggle-row">
+    <button type="button" id="monthly-toggle" aria-expanded="false" class="monthly-toggle-btn">📊 月間レポートを見る</button>
+  </div>
+
+  <div id="monthly-panel" class="monthly-panel" hidden>
+    <div class="monthly-panel-header">
+      <label for="monthly-select">📅 表示する月：</label>
+      <select id="monthly-select"></select>
+    </div>
+    <div id="monthly-content" class="card monthly-card"></div>
   </div>
 
   <div id="message-card-slot">
@@ -1275,5 +1386,58 @@ LINEをブラッシュアップする過程で「AIの助言だけでなく自�
     })();
 
     render(picker.value || REAL_TODAY);
+  })();
+</script>
+
+<script type="application/json" id="monthly-report-data">{}</script>
+<script>
+  // 月間レポート機能(2026-09-06追加): Cowork(Claude)との対話で月末などに
+  // 生成し、Google Driveに保存した月間レポートを一覧・表示する。
+  // サーバー側(Python)がレポートごとのカード本体HTMLを作って埋め込んで
+  // おくので、ここではボタンの開閉と月の選択だけを行う。
+  (function () {
+    var toggleBtn = document.getElementById('monthly-toggle');
+    var panel = document.getElementById('monthly-panel');
+    var select = document.getElementById('monthly-select');
+    var content = document.getElementById('monthly-content');
+    var dataEl = document.getElementById('monthly-report-data');
+    if (!toggleBtn || !panel || !select || !content || !dataEl) return;
+
+    var REPORTS = {};
+    try { REPORTS = JSON.parse(dataEl.textContent || '{}'); } catch (e) { REPORTS = {}; }
+
+    var months = Object.keys(REPORTS).sort().reverse();
+
+    function monthLabel(m) {
+      var parts = m.split('-');
+      return parts[0] + '年' + parseInt(parts[1], 10) + '月';
+    }
+
+    if (months.length === 0) {
+      var placeholder = document.createElement('option');
+      placeholder.textContent = 'まだレポートがありません';
+      select.appendChild(placeholder);
+      select.disabled = true;
+      content.innerHTML = '<p class="monthly-empty">まだ月間レポートが無いよ。月末などの節目にCowork(Claude)へ「今月の月間レポートを作って」とお願いして、できたこと日記フォルダに保存すると、ここに表示されるようになるよ。</p>';
+    } else {
+      months.forEach(function (m) {
+        var opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = monthLabel(m);
+        select.appendChild(opt);
+      });
+      select.addEventListener('change', function () {
+        content.innerHTML = REPORTS[select.value] || '';
+      });
+      select.value = months[0];
+      content.innerHTML = REPORTS[months[0]];
+    }
+
+    toggleBtn.addEventListener('click', function () {
+      var willShow = panel.hidden;
+      panel.hidden = !willShow;
+      toggleBtn.setAttribute('aria-expanded', String(willShow));
+      toggleBtn.textContent = willShow ? '📊 月間レポートを閉じる' : '📊 月間レポートを見る';
+    });
   })();
 </script>
