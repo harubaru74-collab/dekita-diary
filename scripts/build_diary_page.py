@@ -17,6 +17,7 @@
     共有されていること。
   - セットアップ手順は SETUP.md を参照。
 """
+import calendar
 import datetime
 import html
 import io
@@ -201,6 +202,20 @@ def diary_path(d):
     return os.path.join(DIARY_DIR, f"{d.isoformat()}.md")
 
 
+def add_months(d, delta):
+    """dのdeltaヶ月前/後(deltaが負なら前)の日付を返す。「1ヶ月前」「1年前」を
+    単純にdays=30/365で計算すると月によって実際の暦月・暦年とずれる
+    (例:9/15の30日前は8/16になってしまう)ため、暦月ベースで計算する。
+    月末日を跨ぐ場合はその月の末日に丸める(例:3/31の1ヶ月前→2/28、
+    2026-09-15修正)。"""
+    month_index = d.month - 1 + delta
+    year = d.year + month_index // 12
+    month = month_index % 12 + 1
+    last_day = calendar.monthrange(year, month)[1]
+    day = min(d.day, last_day)
+    return datetime.date(year, month, day)
+
+
 # ---------------------------------------------------------------------------
 # 同期状態の記録(2026-09-05追加)
 #
@@ -260,27 +275,25 @@ def render_card_body(d, sections):
     dekita_items = list_items(sections.get("dekita", ""))
     dekita_html = "\n".join(f"    <li>{md_bold(x)}</li>" for x in dekita_items)
 
-    blocks = [f'''      <div class="date">{date_jp(d)}</div>
-      <ul class="dekita">
-{dekita_html}
-      </ul>''']
+    blocks = [f'      <div class="date">{date_jp(d)}</div>']
 
     dekigoto_items = list_items(sections.get("dekigoto", ""))
     if dekigoto_items:
         body = md_bold(to_prose(dekigoto_items))
-        blocks.append(f'''      <details>
+        blocks.append(f'''      <details open>
         <summary>今日のできごとを見る</summary>
         <div class="body-text">{body}</div>
       </details>''')
+
+    blocks.append(f'''      <ul class="dekita">
+{dekita_html}
+      </ul>''')
 
     if sections.get("chappy"):
         blocks.append(f'''      <details>
         <summary>チャッピーからのコメントを見る</summary>
         <div class="chappy">{esc(sections["chappy"])}</div>
       </details>''')
-
-    if sections.get("summary"):
-        blocks.append(f'      <p class="summary-line">{esc(sections["summary"])}</p>')
 
     return "\n".join(blocks)
 
@@ -663,8 +676,8 @@ def build_page(anchor=None):
 
     today = anchor or datetime.date.today()
     week_ago = today - datetime.timedelta(days=7)
-    month_ago = today - datetime.timedelta(days=30)
-    year_ago = today - datetime.timedelta(days=365)
+    month_ago = add_months(today, -1)
+    year_ago = add_months(today, -12)
 
     def card_for(kind_class, badge, d, today_flag=False):
         sections = load_existing(d)
