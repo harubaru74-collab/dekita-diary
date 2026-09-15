@@ -260,27 +260,25 @@ def render_card_body(d, sections):
     dekita_items = list_items(sections.get("dekita", ""))
     dekita_html = "\n".join(f"    <li>{md_bold(x)}</li>" for x in dekita_items)
 
-    blocks = [f'''      <div class="date">{date_jp(d)}</div>
-      <ul class="dekita">
-{dekita_html}
-      </ul>''']
+    blocks = [f'      <div class="date">{date_jp(d)}</div>']
 
     dekigoto_items = list_items(sections.get("dekigoto", ""))
     if dekigoto_items:
         body = md_bold(to_prose(dekigoto_items))
-        blocks.append(f'''      <details>
+        blocks.append(f'''      <details open>
         <summary>今日のできごとを見る</summary>
         <div class="body-text">{body}</div>
       </details>''')
+
+    blocks.append(f'''      <ul class="dekita">
+{dekita_html}
+      </ul>''')
 
     if sections.get("chappy"):
         blocks.append(f'''      <details>
         <summary>チャッピーからのコメントを見る</summary>
         <div class="chappy">{esc(sections["chappy"])}</div>
       </details>''')
-
-    if sections.get("summary"):
-        blocks.append(f'      <p class="summary-line">{esc(sections["summary"])}</p>')
 
     return "\n".join(blocks)
 
