@@ -675,6 +675,21 @@
       return d.toISOString().slice(0, 10);
     }
 
+    function addMonths(iso, delta) {
+      // 「1ヶ月前」「1年前」を単純に30日/365日前で計算すると、月によって
+      // 実際の暦月・暦年とずれる(例:9/15の30日前は8/16になってしまう)ため、
+      // 暦月ベースで計算する。月末日を跨ぐ場合はその月の末日に丸める
+      // (例:3/31の1ヶ月前→2/28、2026-09-15修正)。
+      var parts = iso.split('-').map(Number);
+      var monthIndex = (parts[1] - 1) + delta;
+      var year = parts[0] + Math.floor(monthIndex / 12);
+      var month = ((monthIndex % 12) + 12) % 12;
+      var lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      var day = Math.min(parts[2], lastDay);
+      var d = new Date(Date.UTC(year, month, day));
+      return d.toISOString().slice(0, 10);
+    }
+
     function formatJP(iso) {
       var d = new Date(iso + 'T00:00:00');
       return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WEEKDAY_JP[d.getDay()] + '）';
@@ -698,8 +713,8 @@
       cardsSlot.innerHTML =
         cardHTML('today', isRealToday ? '今日' : '選んだ日', iso, isRealToday) +
         cardHTML('week', '1週間前', addDays(iso, -7), false) +
-        cardHTML('month', '1ヶ月前', addDays(iso, -30), false) +
-        cardHTML('year', '1年前', addDays(iso, -365), false);
+        cardHTML('month', '1ヶ月前', addMonths(iso, -1), false) +
+        cardHTML('year', '1年前', addMonths(iso, -12), false);
 
       if (titleEl) {
         titleEl.textContent = formatJP(iso) + (isRealToday ? ' の成長のあしあと' : ' を起点に振り返る');
