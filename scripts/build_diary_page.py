@@ -285,12 +285,15 @@ def render_card_body(d, sections):
         <div class="body-text">{body}</div>
       </details>''')
 
-    blocks.append(f'''      <ul class="dekita">
+    blocks.append(f'''      <details open>
+        <summary>できたこと</summary>
+        <ul class="dekita">
 {dekita_html}
-      </ul>''')
+        </ul>
+      </details>''')
 
     if sections.get("chappy"):
-        blocks.append(f'''      <details>
+        blocks.append(f'''      <details open>
         <summary>チャッピーからのコメントを見る</summary>
         <div class="chappy">{esc(sections["chappy"])}</div>
       </details>''')
