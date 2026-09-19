@@ -547,14 +547,14 @@
 <div class="wrap">
   <header class="hero">
     <span class="kicker">🌱 できたこと日記</span>
-    <h1 id="page-title">2026年9月18日（金） の成長のあしあと</h1>
+    <h1 id="page-title">2026年9月19日（土） の成長のあしあと</h1>
     <p class="sub">今日・1週間前・1ヶ月前・1年前の「できたこと」を並べて、積み重ねを見える化する場所</p>
   </header>
 
   <div class="date-nav">
     <div class="date-nav-row">
       <label for="date-picker">📅 見たい日を選ぶ：</label>
-      <input type="date" id="date-picker" value="2026-09-18" min="2026-08-16" max="2026-09-18">
+      <input type="date" id="date-picker" value="2026-09-19" min="2026-08-16" max="2026-09-19">
     </div>
     <div class="date-nav-row">
       <button type="button" id="date-prev" class="day-step" aria-label="前の日">◀</button>
@@ -589,15 +589,10 @@
       <div class="emoji">🌱</div>
       <p>まだ記録がないよ<br />これからの積み重ねが楽しみだね</p>
     </div>
-    <div class="card month">
+    <div class="card empty">
       <span class="badge">1ヶ月前</span>
-      <div class="date">2026年8月18日（火）</div>
-      <details open>
-        <summary>できたこと</summary>
-        <ul class="dekita">
-
-        </ul>
-      </details>
+      <div class="emoji">🌱</div>
+      <p>まだ記録がないよ<br />これからの積み重ねが楽しみだね</p>
     </div>
     <div class="card empty">
       <span class="badge">1年前</span>
@@ -1472,7 +1467,7 @@ LINEをブラッシュアップする過程で「AIの助言だけでなく自�
   // 全日記のカード本体HTMLを埋め込んでおくので、ここでは日付計算と
   // 差し替えだけを行う(表示ロジックの二重管理を避けるため)。
   (function () {
-    var REAL_TODAY = '2026-09-18';
+    var REAL_TODAY = '2026-09-19';
     var dataEl = document.getElementById('diary-calendar-data');
     var CARD_BODIES = {};
     try { CARD_BODIES = JSON.parse(dataEl.textContent || '{}'); } catch (e) { CARD_BODIES = {}; }
